@@ -3,6 +3,8 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
 const cors = require("cors");
+const { isSupabaseConfigured } = require("./config/supabase");
+const { requireDatabase } = require("./middleware/requireAdmin");
 const productsRouter = require("./routes/products");
 const ordersRouter = require("./routes/orders");
 const adminOrdersRouter = require("./routes/adminOrders");
@@ -33,7 +35,7 @@ app.use(
       }
       return callback(null, false);
     },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
@@ -45,6 +47,7 @@ const healthCheck = (req, res) => {
   res.json({
     status: "ok",
     message: "DAVID COMMUNICATIONS API is running.",
+    database: isSupabaseConfigured ? "configured" : "unconfigured",
     timestamp: new Date().toISOString(),
   });
 };
@@ -52,12 +55,12 @@ const healthCheck = (req, res) => {
 app.get("/", healthCheck);
 app.get("/api", healthCheck);
 
-app.use("/api/products", productsRouter);
-app.use("/api/orders", ordersRouter);
-app.use("/api/admin/orders", adminOrdersRouter);
-app.use("/api/admin/devices", deviceVerificationRouter);
-app.use("/api/admin/returns", returnsRouter);
-app.use("/api/customer/returns", customerReturnsRouter);
+app.use("/api/products", requireDatabase, productsRouter);
+app.use("/api/orders", requireDatabase, ordersRouter);
+app.use("/api/admin/orders", requireDatabase, adminOrdersRouter);
+app.use("/api/admin/devices", requireDatabase, deviceVerificationRouter);
+app.use("/api/admin/returns", requireDatabase, returnsRouter);
+app.use("/api/customer/returns", requireDatabase, customerReturnsRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: "API endpoint not found." });

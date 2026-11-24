@@ -1,7 +1,7 @@
 
 const express = require("express");
 const router = express.Router();
-const supabase = require("../config/supabase");
+const { supabase } = require("../config/supabase");
 
 router.post("/", async (req, res) => {
   try {

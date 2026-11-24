@@ -1,52 +1,58 @@
 
 const express = require("express");
 const router = express.Router();
-const supabase = require("../config/supabase");
+const { supabase } = require("../config/supabase");
+const { requireAdmin } = require("../middleware/requireAdmin");
 
-// Require a valid Supabase user who is listed as an admin.
-async function requireAdmin(req, res, next) {
+// List recently registered devices.
+// GET /api/admin/devices
+router.get("/", requireAdmin, async (req, res) => {
   try {
-    const header = req.headers.authorization || "";
-    const token = header.startsWith("Bearer ")
-      ? header.slice(7)
-      : null;
+    const { data, error } = await supabase
+      .from("device_registry")
+      .select(`
+        id,
+        serial_number,
+        barcode,
+        warranty_until,
+        device_status,
+        registered_at,
+        orders (
+          id,
+          order_number,
+          status,
+          payment_status,
+          created_at
+        ),
+        order_items (
+          product_name,
+          quantity,
+          unit_price
+        ),
+        products (
+          name,
+          brand,
+          category
+        )
+      `)
+      .order("registered_at", { ascending: false })
+      .limit(100);
 
-    if (!token) {
-      return res.status(401).json({
-        message: "Authentication required.",
+    if (error) {
+      console.error("List devices error:", error.message);
+      return res.status(500).json({
+        message: "Unable to load registered devices.",
       });
     }
 
-    const { data: userData, error: userError } =
-      await supabase.auth.getUser(token);
-
-    if (userError || !userData?.user) {
-      return res.status(401).json({
-        message: "Your session is invalid or expired.",
-      });
-    }
-
-    const { data: admin, error: adminError } = await supabase
-      .from("admin_users")
-      .select("user_id")
-      .eq("user_id", userData.user.id)
-      .maybeSingle();
-
-    if (adminError || !admin) {
-      return res.status(403).json({
-        message: "Administrator access required.",
-      });
-    }
-
-    req.adminUser = userData.user;
-    next();
+    return res.json({ devices: data || [] });
   } catch (error) {
-    console.error("Admin authentication error:", error);
+    console.error("List devices error:", error);
     return res.status(500).json({
-      message: "Unable to verify administrator access.",
+      message: "An unexpected error occurred.",
     });
   }
-}
+});
 
 // Verify a device using its serial number or barcode.
 // GET /api/admin/devices/verify?serial=...

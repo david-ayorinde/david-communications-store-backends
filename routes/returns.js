@@ -2,42 +2,8 @@
 const express = require("express");
 const crypto = require("crypto");
 const router = express.Router();
-const supabase = require("../config/supabase");
-
-async function requireAdmin(req, res, next) {
-  try {
-    const header = req.headers.authorization || "";
-    const token = header.startsWith("Bearer ")
-      ? header.slice(7)
-      : null;
-
-    if (!token) {
-      return res.status(401).json({ message: "Admin login required." });
-    }
-
-    const { data, error } = await supabase.auth.getUser(token);
-
-    if (error || !data?.user) {
-      return res.status(401).json({ message: "Invalid or expired session." });
-    }
-
-    const { data: admin, error: adminError } = await supabase
-      .from("admin_users")
-      .select("user_id")
-      .eq("user_id", data.user.id)
-      .maybeSingle();
-
-    if (adminError || !admin) {
-      return res.status(403).json({ message: "Admin access required." });
-    }
-
-    req.adminUser = data.user;
-    next();
-  } catch (error) {
-    console.error("Admin verification error:", error);
-    return res.status(500).json({ message: "Authentication check failed." });
-  }
-}
+const { supabase } = require("../config/supabase");
+const { requireAdmin } = require("../middleware/requireAdmin");
 
 // List returns, optionally filtered by status.
 router.get("/", requireAdmin, async (req, res) => {

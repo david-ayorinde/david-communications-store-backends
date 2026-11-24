@@ -1,6 +1,7 @@
 
 const express = require("express");
-const supabase = require("../config/supabase");
+const { supabase } = require("../config/supabase");
+const { requireAdmin } = require("../middleware/requireAdmin");
 
 const router = express.Router();
 
@@ -13,42 +14,7 @@ const allowedStatuses = [
   "cancelled",
 ];
 
-async function requireAdmin(req, res, next) {
-  try {
-    const authorization = req.headers.authorization || "";
-    const token = authorization.startsWith("Bearer ")
-      ? authorization.slice(7)
-      : "";
-
-    if (!token) {
-      return res.status(401).json({ message: "Please sign in." });
-    }
-
-    const { data: authData, error: authError } =
-      await supabase.auth.getUser(token);
-
-    if (authError || !authData.user) {
-      return res.status(401).json({ message: "Invalid session." });
-    }
-
-    const { data: admin, error } = await supabase
-      .from("admin_users")
-      .select("user_id")
-      .eq("user_id", authData.user.id)
-      .maybeSingle();
-
-    if (error) throw error;
-
-    if (!admin) {
-      return res.status(403).json({ message: "Admin access required." });
-    }
-
-    next();
-  } catch (error) {
-    console.error("Admin authorization error:", error.message);
-    res.status(500).json({ message: "Could not verify admin access." });
-  }
-}
+const allowedPaymentStatuses = ["unpaid", "paid", "refunded"];
 
 router.use(requireAdmin);
 
@@ -148,6 +114,52 @@ router.patch("/:id/status", async (req, res) => {
   } catch (error) {
     console.error("Update order status error:", error.message);
     res.status(500).json({ message: "Could not update order status." });
+  }
+});
+
+// PATCH /api/admin/orders/:id/payment-status
+router.patch("/:id/payment-status", async (req, res) => {
+  try {
+    const { payment_status } = req.body;
+
+    if (!allowedPaymentStatuses.includes(payment_status)) {
+      return res.status(400).json({ message: "Invalid payment status." });
+    }
+
+    const { data: existing, error: findError } = await supabase
+      .from("orders")
+      .select("id, status, payment_status")
+      .eq("id", req.params.id)
+      .maybeSingle();
+
+    if (findError) throw findError;
+
+    if (!existing) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+
+    if (existing.status === "cancelled" && payment_status === "paid") {
+      return res.status(400).json({
+        message: "Cannot mark a cancelled order as paid.",
+      });
+    }
+
+    const { data, error } = await supabase
+      .from("orders")
+      .update({ payment_status })
+      .eq("id", req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({
+      message: "Payment status updated.",
+      order: data,
+    });
+  } catch (error) {
+    console.error("Update payment status error:", error.message);
+    res.status(500).json({ message: "Could not update payment status." });
   }
 });
 

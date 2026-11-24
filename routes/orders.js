@@ -2,7 +2,7 @@
 const express = require("express");
 const router = express.Router();
 const crypto = require("crypto");
-const supabase = require("../config/supabase");
+const { supabase } = require("../config/supabase");
 
 function createOrderNumber() {
   const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");

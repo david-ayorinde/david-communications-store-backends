@@ -1,7 +1,7 @@
 
 const express = require("express");
-const { createClient } = require("@supabase/supabase-js");
-const supabase = require("../config/supabase");
+const { supabase } = require("../config/supabase");
+const { requireAdmin } = require("../middleware/requireAdmin");
 
 const router = express.Router();
 
@@ -12,79 +12,6 @@ const allowedCategories = [
   "Accessories",
   "Audio",
 ];
-
-function getBearerToken(req) {
-  const authorization = req.headers.authorization || "";
-
-  if (!authorization.startsWith("Bearer ")) {
-    return null;
-  }
-
-  return authorization.slice(7).trim() || null;
-}
-
-// Verify that the request has a valid Supabase session
-// and belongs to an approved administrator.
-async function requireAdmin(req, res, next) {
-  try {
-    const token = getBearerToken(req);
-
-    if (!token) {
-      return res.status(401).json({
-        error: "Authorization token is required.",
-      });
-    }
-
-    const authClient = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    );
-
-    const { data: userData, error: authError } =
-      await authClient.auth.getUser(token);
-
-    if (authError || !userData.user) {
-      return res.status(401).json({
-        error: "Your session is invalid or expired. Please sign in again.",
-      });
-    }
-
-    const { data: admin, error: adminError } = await supabase
-      .from("admin_users")
-      .select("user_id")
-      .eq("user_id", userData.user.id)
-      .maybeSingle();
-
-    if (adminError) {
-      console.error("Admin lookup failed:", adminError.message);
-
-      return res.status(500).json({
-        error: "Could not verify administrator permissions.",
-      });
-    }
-
-    if (!admin) {
-      return res.status(403).json({
-        error: "This account is not an approved administrator.",
-      });
-    }
-
-    req.admin = userData.user;
-    next();
-  } catch (error) {
-    console.error("Admin verification error:", error.message);
-
-    return res.status(500).json({
-      error: "Unable to verify admin access.",
-    });
-  }
-}
 
 // GET /api/products
 // Public product catalogue.
